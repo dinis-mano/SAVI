@@ -12,7 +12,7 @@ def main():  # this is our main function
     print("SAVI exercise")
 
     # relative path
-    image = cv2.imread("images/dog_2.jpg")
+    image = cv2.imread("images/dog_3.jpg")
     height, width, channels = image.shape
     image = cv2.resize(image, (round(width / 2), round(height / 2)))
     cv2.imshow('Original', image)
@@ -27,35 +27,41 @@ def main():  # this is our main function
 
     # split of the color channels
     h, s, v = cv2.split(hsv_image)
-    cv2.imshow('H', h)
-    cv2.imshow('S', s)
-    cv2.imshow('V', v)
+    #cv2.imshow('H', h)
+    #cv2.imshow('S', s)
+    #cv2.imshow('V', v)
 
     # get masks by imposing limits on the channels
     mask_h = np.logical_and(h > 20, h < 50)  # assumming green color has hue 60
-    showMask('mask_h', mask_h)
+    #showMask('mask_h', mask_h)
 
     mask_s = np.logical_and(s > 100, s < 255)
-    showMask('mask_s', mask_s)
+    #showMask('mask_s', mask_s)
 
     mask_v = np.logical_and(v > 60, v < 255)
-    showMask('mask_v', mask_v)
+    #showMask('mask_v', mask_v)
 
     # Putting the mask alltoghether
     mask = np.logical_and(mask_h, mask_s)
     mask = np.logical_and(mask, mask_v)
 
-    showMask('mask', mask)
+    #showMask('mask', mask)
 
     # Post processing using morphological operations
     kernel = np.ones((5, 5), np.uint8)
 
     mask_uint8 = mask.astype(np.uint8) * 255
-    mask_dilated_uint8 = cv2.dilate(mask_uint8, kernel, iterations=0)
+    mask_dilated_uint8 = cv2.dilate(mask_uint8, kernel, iterations=2)
     mask_dilated = (mask_dilated_uint8.astype(float) / 255).astype(np.bool)
 
     # cv2.imshow("mask_dilated", mask_dilated_uint8)
     showMask('dilated mask', mask_dilated)
+
+    mask_erode_uint8 = mask_dilated.astype(np.uint8) * 255
+    mask_erode_uint8 = cv2.erode(mask_erode_uint8, kernel, iterations=2)
+    mask_eroded = (mask_erode_uint8.astype(float) / 255).astype(np.bool)
+
+    showMask('eroded mask', mask_eroded)
 
     # to get the mask of thedog we negate the mask of the grass,
     # assuming the image contains only dog and grass
