@@ -1,0 +1,165 @@
+# imports --------------------
+import argparse
+import cv2
+import json
+import numpy as np
+import signal
+import sys
+from colorama import Fore, Style
+
+def signal_handler(sig, frame):
+    print('You pressed Ctrl+C!')
+    sys.exit(0)
+
+
+def signal_handler_term(sig, frame):
+    print('You pressed Ctrl+C!')
+    sys.exit(0)
+
+
+def showMask(window_name, image):
+    image_to_show = image.astype(np.uint8)*255
+    cv2.imshow(window_name, image_to_show)
+
+# Main function
+def main(): # this is our main function
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler_term)
+    print("SAVI exercise")
+
+    # -------------------------------------------------------------------------
+    # Initialization
+    # -------------------------------------------------------------------------
+
+    # initialize argparser
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-lbf", "--lane_bboxes_filename", type=str, required=False,
+                    default='lane_bboxes.json',
+                    help="Name of the json file containing the lane bounding boxes.", )
+    ap.add_argument("-acr", "--average_color_reference", type=int, required=False,
+                    default=125,
+                    help="Average reference color of the road")
+
+    ap.add_argument("-dt", "--detection_threshold", type=int, required=False,
+                    default=15,
+                    help="Detection threshold for deciding when a significant change occured.")
+
+    args = ap.parse_args()
+    args = vars(args) # transform the args into a dictionary
+    print('Input args: ' + str(args))
+
+
+    # Other setupds
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    prev_significant_change = False
+    number_of_cars = 0
+
+    # read json file with the lane bounding boxes
+    with open(args['lane_bboxes_filename'], "r") as f:
+        d_bboxes = json.load(f)
+
+    # Setup the video capture object -------------------------------------------
+    cap = cv2.VideoCapture("docs/traffic.mp4")
+    WIDTH = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    HEIGHT = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    FPS = round(cap.get(cv2.CAP_PROP_FPS), 2)
+    print('fps = ' + str(FPS))
+
+    # -------------------------------------------------------------------------
+    # Continuous operations
+    # -------------------------------------------------------------------------
+    while True:
+
+        # -------------------------------------------------------------------------
+        # Read the frame
+        # -------------------------------------------------------------------------
+        ret, image_rgb = cap.read()
+        if not ret: # test to see if the video reading is finsished
+            print('Completed processing video')
+            break
+
+        cv2.imshow('Image', image_rgb) # Display the resulting frame
+
+        # -------------------------------------------------------------------------
+        # How to detect the cars passing through tthe lanes
+        # -------------------------------------------------------------------------
+        # How many cars passed through lane X?
+
+        image_gui = image_rgb.copy() # copy the image to draw the gui on it
+
+        # Get the grayscale image for computing the average
+        image_gray = cv2.cvtColor(image_rgb, cv2.COLOR_BGR2GRAY) # convert the image to gray scale
+
+
+        # -------------------------------------------------------------------------
+        # How to detect the cars passing through the lanes
+        # -------------------------------------------------------------------------
+
+        # Get the average grayscale color of the lane bounding box
+        x = d_bboxes['lanes'][0]['x']
+        y = d_bboxes['lanes'][0]['y']
+        w = d_bboxes['lanes'][0]['w']
+        h = d_bboxes['lanes'][0]['h']
+
+        image_bbox = image_gray[y:y+h, x:x+w] # crop the image to the roi
+
+        avg_color = round(np.mean(image_bbox),1) # compute the average color of the roi
+
+        diff = abs(avg_color - args['average_color_reference'])
+
+        is_significant_change = diff > args['detection_threshold']
+
+        car_detected = False
+
+        if is_significant_change and not prev_significant_change:
+            car_detected = True
+        else:
+            car_detected = False
+
+        if car_detected:
+            number_of_cars += 1
+
+        prev_significant_change = is_significant_change
+
+
+        # -------------------------------------------------------------------------
+        # Visualization
+        # -------------------------------------------------------------------------
+
+        # Draw the bounding boxes of the lanes
+        cv2.rectangle(image_gui, (x,y), (x+w, y+h), (255,0,0), 2)
+
+        # draw the frame number and corresponding time
+        frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        time_in_seconds = frame_number / FPS
+        cv2.putText(image_gui, f"Frame: {frame_number}, Time: {time_in_seconds:.2f}s, Number of Cars: {number_of_cars}",
+                    (40, 40), font, 0.5, (0, 255, 0), 2)
+
+
+        # draw the avg color near the bbox
+        if is_significant_change:
+            color = (0, 255, 0) # Green
+        else:
+            color = (255, 0, 0) # Blue
+        cv2.putText(image_gui, f'hue: {avg_color} \n #cars: {number_of_cars}', (x, y-40), font, 1, color, 2)
+
+
+
+        # -------------------------------------------------------------------------
+        # Visualization
+        # -------------------------------------------------------------------------
+
+        # Draw the bounding boxes of the lanes
+        cv2.rectangle(image_gui, (x,y), (x+w, y+h), (255,0,0), 2)
+
+        cv2.imshow('Image', image_gui) # Display the resulting frame
+
+        # -------------------------------------------------------------------------
+        # handle key press events
+        # -------------------------------------------------------------------------
+        key = cv2.waitKey(50)
+        if key == 27:
+            break
+
+if __name__ == "__main__":
+    main()
